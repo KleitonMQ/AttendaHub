@@ -1,1 +1,7 @@
 .env
+
+n8n_data/
+evolution_data/
+postgres_data/
+redis_data/
+chatwoot_storage/

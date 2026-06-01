@@ -1,7 +1,7 @@
 services:
 
   n8n:
-    image: n8nio/n8n:2.22.3
+    image: n8nio/n8n:latest
     container_name: attendahub-n8n
     restart: unless-stopped
     ports:
@@ -10,39 +10,45 @@ services:
       - N8N_BASIC_AUTH_ACTIVE=true
       - N8N_BASIC_AUTH_USER=${N8N_USER}
       - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD}
+      #- WEBHOOK_URL=https://attendahub-hook.com/
       - TZ=America/Bahia
     volumes:
       - ./n8n_data:/home/node/.n8n
     depends_on:
       - postgres
 
-  evolution-api:
-    image: atendai/evolution-api:v1.8.7
-    container_name: attendahub-evolution
+  wuzapi:
+    image: asternic/wuzapi:latest
+    container_name: attendahub-wuzapi
     restart: unless-stopped
+
     ports:
       - "8080:8080"
+
     environment:
-      - SERVER_TYPE=http
-      - SERVER_PORT=8080
-      - LOG_LEVEL=info
+      - WUZAPI_ADMIN_TOKEN=${WUZAPI_ADMIN_TOKEN}
       - TZ=America/Bahia
+
     volumes:
-      - ./evolution_data:/app/data
+      - ./wuzapi_data:/app/store
 
   postgres:
-    image: postgres:14
+    image: pgvector/pgvector:pg17
     container_name: attendahub-postgres
     restart: unless-stopped
+
     ports:
-      - "5432:5432"
+    - "5432:5432"
+
     environment:
       - POSTGRES_DB=chatwoot_production
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - TZ=America/Bahia
+
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
+      - ./postgres_init:/docker-entrypoint-initdb.d
 
   redis:
     image: redis:7
@@ -56,14 +62,22 @@ services:
     image: chatwoot/chatwoot:latest
     container_name: attendahub-chatwoot
     restart: unless-stopped
+
+    command: >
+      sh -c "bundle exec rails db:chatwoot_prepare &&
+             bundle exec rails server -p 3000 -b 0.0.0.0"
+
     depends_on:
       - postgres
       - redis
+
     ports:
       - "3000:3000"
+
     environment:
       - RAILS_ENV=production
       - SECRET_KEY_BASE=${CHATWOOT_SECRET_KEY_BASE}
+
       - FRONTEND_URL=http://localhost:3000
 
       - REDIS_URL=redis://redis:6379
@@ -75,12 +89,35 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 
       - TZ=America/Bahia
+
     volumes:
       - ./chatwoot_storage:/app/storage
 
-#volumes:
-#  n8n_data:
-#  evolutionapi_data:
-#  postgres_data:
-#  redis_data:
-#  chatwoot_storage:
+  chatwoot-worker:
+    image: chatwoot/chatwoot:latest
+    container_name: attendahub-chatwoot-worker
+
+    restart: unless-stopped
+
+    command: bundle exec sidekiq
+
+    depends_on:
+      - postgres
+      - redis
+
+    environment:
+      - RAILS_ENV=production
+      - SECRET_KEY_BASE=${CHATWOOT_SECRET_KEY_BASE}
+
+      - REDIS_URL=redis://redis:6379
+
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DATABASE=chatwoot_production
+      - POSTGRES_USERNAME=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+
+      - TZ=America/Bahia
+
+    volumes:
+      - ./chatwoot_storage:/app/storage
