@@ -1,43 +1,76 @@
 Acessos:
 N8N : http://localhost:5678/
 
+C:\Users\Moosh>curl -X PUT http://localhost:8080/webhook -H "token: token" -H "Content-Type: application/json" -d "{\"webhook\":\"https://duvet-junkyard-stumbling.ngrok-free.dev/webhook-test/whatsapp\",\"events\":[\"Message\"],\"active\":true}"
+{"code":200,"data":{"active":true,"events":["Message"],"webhook":"https://duvet-junkyard-stumbling.ngrok-free.dev/webhook-test/whatsapp"},"success":true}
+
+C:\Users\Moosh>curl -X GET http://localhost:8080/webhook -H "token: token"
+{"code":200,"data":{"subscribe":["Message"],"webhook":"https://duvet-junkyard-stumbling.ngrok-free.dev/webhook-test/whatsapp"},"success":true}
+
 ```mermaid
 erDiagram
 
-    SETOR {
-        int id PK
-        varchar nome
+    setor {
+        SERIAL id PK
+        VARCHAR nome
     }
 
-    FUNCIONARIO {
-        int id PK
-        varchar nome
-        varchar telefone UK
-        int setor_id FK
-        varchar status
-        int atendimentos_ativos
-        timestamp criado_em
-        timestamp atualizado_em
+    funcionario {
+        SERIAL id PK
+        VARCHAR nome
+        VARCHAR telefone
+        INT setor_id FK
+        VARCHAR status
+        INT atendimentos_ativos
+        TIMESTAMP criado_em
+        TIMESTAMP atualizado_em
     }
 
-    ATENDIMENTO {
-        int id PK
-        varchar protocolo UK
-        varchar telefone_cliente UK
-        varchar nome_cliente
-        int setor_id FK
-        int atendente_id FK
-        varchar etapa
-        varchar status
-        timestamp ultima_mensagem
-        timestamp criado_em
-        timestamp atualizado_em
+    atendimento {
+        SERIAL id PK
+        VARCHAR protocolo
+        VARCHAR telefone_cliente
+        VARCHAR nome_cliente
+        INT setor_id FK
+        INT atendente_id FK
+        VARCHAR status
+        TIMESTAMP ultima_mensagem
+        TIMESTAMP criado_em
+        TIMESTAMP atualizado_em
     }
 
-    SETOR ||--o{ FUNCIONARIO : possui
+    fila_mensagens {
+        BIGSERIAL id PK
+        VARCHAR telefone_destino
+        TEXT mensagem
+        INT atendimento_id FK
+        VARCHAR tipo
+        VARCHAR status
+        TIMESTAMP criado_em
+        TIMESTAMP enviado_em
+        INT tentativas
+        TEXT erro
+    }
 
-    SETOR ||--o{ ATENDIMENTO : atende
+    fila_ia {
+        BIGSERIAL id PK
+        INT atendimento_id FK
+        VARCHAR telefone_cliente
+        TEXT mensagem
+        VARCHAR status
+        TIMESTAMP criado_em
+        TIMESTAMP processado_em
+    }
 
-    FUNCIONARIO ||--o{ ATENDIMENTO : realiza
+
+    setor ||--o{ funcionario : possui
+
+    setor ||--o{ atendimento : pertence
+
+    funcionario ||--o{ atendimento : atende
+
+    atendimento ||--o{ fila_mensagens : possui
+
+    atendimento ||--o{ fila_ia : possui
 ```
 
