@@ -1,0 +1,1021 @@
+{
+  "name": "AttendaHub",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1104,
+        64
+      ],
+      "id": "fa92d470-76a5-454b-ab76-0d543fa6b2b8",
+      "name": "Webhook",
+      "webhookId": "91793f46-c6d9-41d4-b380-00e62b9099c1"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const data = JSON.parse($json.body.jsonData);\n\n  if (data.type !== \"Message\") {\n    return [];\n  }\n  \n  return [\n    {\n      json: {\n        instanceName: $json.body.instanceName || \"\",\n\n        isFromMe: data?.event?.Info?.IsFromMe ?? false,\n\n        isGroup: data?.event?.Info?.IsGroup ?? false,\n\n        nome: data?.event?.Info?.PushName || \"\",\n\n        numero: data?.event?.Info?.SenderAlt || data?.event?.Info?.Chat || \"\",\n\n        chatId: data?.event?.Info?.Chat || \"\",\n\n        mensagem:\n          data?.event?.Message?.extendedTextMessage?.text ||\n          data?.event?.Message?.conversation ||\n          \"\",\n\n        dataHora: data?.event?.Info?.Timestamp || \"\",\n\n        tipoMensagem:\n          data?.event?.Info?.MediaType || data?.event?.Info?.Type || \"unknown\",\n\n        // ID da mensagem recebida\n        messageId: data?.event?.Info?.ID || \"\",\n\n        // participante que enviou\n        participant:\n          data?.event?.Info?.SenderAlt || data?.event?.Info?.Sender || \"\",\n\n        // tipo principal do evento\n        eventType: data?.type || \"\",\n\n        // grupo ou conversa\n        addressingMode: data?.event?.Info?.AddressingMode || \"\",\n\n        // telefone limpo para envio\n        phone: (data?.event?.Info?.SenderAlt || data?.event?.Info?.Chat || \"\").split(':')[0]\n          .replace(\"@s.whatsapp.net\", \"\")\n          .replace(\"@lid\", \"\")\n          .replace(\"@g.us\", \"\"),\n      },\n    },\n  ];\n} catch (error) {\n  return [\n    {\n      json: {\n        erro: true,\n        mensagemErro: error.message,\n        payloadOriginal: $json,\n      },\n    },\n  ];\n}\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -864,
+        64
+      ],
+      "id": "f8dcecc8-13cb-4eb8-81e5-9cf35594d12d",
+      "name": "Filtrar dados importantes"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "75a4ca18-384b-42d2-aa62-408b5e46991a",
+              "leftValue": "={{ $('Filtrar dados importantes').item.json.isFromMe }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "81fd14a4-c7bd-403b-be39-a5671656fa39",
+              "leftValue": "={{ $('Filtrar dados importantes').item.json.isGroup }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -672,
+        64
+      ],
+      "id": "87f1128d-6772-4b67-8db3-43d4e6d6c4dd",
+      "name": "Mensagem minha ou de grupo?"
+    },
+    {
+      "parameters": {
+        "content": "## Tipos de Mensagens\nsticker\nptt\ntext\nimage\nvídeo\ndocument\nlocation\nvcard\npoll\ngif",
+        "height": 272
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -976,
+        -560
+      ],
+      "id": "9840348d-9916-4b0c-b79c-8cf736f0d715",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5189d422-c69a-4a93-a12c-b50c760ebaaa",
+              "leftValue": "={{ $('Filtrar dados importantes').item.json.tipoMensagem }}",
+              "rightValue": "text",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        976,
+        336
+      ],
+      "id": "c879b590-4085-4c7e-aa1e-fe7be50c70db",
+      "name": "É mensagem de texto?",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT EXISTS (\n    SELECT 1\n    FROM atendimento\n    WHERE telefone_cliente = '{{ $('Filtrar dados importantes').item.json.phone }}'\n      AND status <> 'FINALIZADO'\n) AS existe_atendimento;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        112,
+        176
+      ],
+      "id": "7c80c181-cf30-41c2-aff7-3c647963f9b5",
+      "name": "Consultar atendimento",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "8d144a88-9008-49f4-ae9e-0ef5ef80d4ad",
+              "leftValue": "={{ $json.existe_atendimento }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        320,
+        176
+      ],
+      "id": "486b38a6-b431-4a1e-b857-bfc468b4704a",
+      "name": "Em atendimento"
+    },
+    {
+      "parameters": {
+        "jsCode": "function gerarProtocolo() {\n\n  const agora = new Date();\n\n  const data =\n    agora.getFullYear().toString().slice(-2) +\n    String(agora.getMonth() + 1).padStart(2, \"0\") +\n    String(agora.getDate()).padStart(2, \"0\");\n\n  const numero = Math.floor(Math.random() * 90000) + 10000;\n\n  return `ATD${data}${numero}`;\n}\n\nreturn [{\n  json: {\n    ...$json,\n    protocolo: gerarProtocolo()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        320
+      ],
+      "id": "aca2bfec-e2d7-4442-a378-c90aa511a589",
+      "name": "Gerar protocolo"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO atendimento\n(\n    protocolo,\n    telefone_cliente,\n    nome_cliente,\n    setor_id,\n    status\n)\nVALUES\n(\n    '{{ $json.protocolo }}',\n    '{{ $('Filtrar dados importantes').item.json.phone }}',\n    '{{ $('Filtrar dados importantes').item.json.nome }}',\n    (\n        SELECT id\n        FROM setor\n        WHERE nome = 'Recepcao'\n    ),\n    'EM_ATENDIMENTO'\n)\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1408,
+        320
+      ],
+      "id": "4444d37a-59c5-432c-965e-60b76784d4ff",
+      "name": "Criar atendimento",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    a.*,\n    s.nome AS setor,\n    f.nome AS atendente,\n    f.telefone AS telefone_atendente\nFROM atendimento a\n\nINNER JOIN setor s\n    ON s.id = a.setor_id\n\nLEFT JOIN funcionario f\n    ON f.id = a.atendente_id\n\nWHERE a.telefone_cliente = '{{ $('Filtrar dados importantes').item.json.phone }}'\n  AND a.status <> 'FINALIZADO'\n\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        912,
+        160
+      ],
+      "id": "24a189d4-935b-4b61-b175-315c41902c70",
+      "name": "Encontrar atendimento",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO fila_mensagens (\n    telefone,\n    mensagem,\n    atendimento_id,\n    tipo\n)\nVALUES (\n    '{{ $('Filtrar dados importantes').item.json.phone }}',\n    '{{ $('Filtrar dados importantes').item.json.mensagem }}',\n    {{ $json.id }},\n    'ENTRADA'\n)\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1680,
+        160
+      ],
+      "id": "c6686b5d-749f-4622-b52d-4cf7d25c2518",
+      "name": "Inserir mensagem a fila",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT EXISTS (\n    SELECT 1\n    FROM funcionario f\n    WHERE f.telefone = '{{ $('Filtrar dados importantes').item.json.phone }}'\n) AS eh_funcionario;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -464,
+        160
+      ],
+      "id": "52bce63f-c862-436f-abb5-1de4aae17979",
+      "name": "VerficarNumero",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "96c196c4-238a-43ca-a502-294ee750bc01",
+              "leftValue": "={{ $json.eh_funcionario }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -256,
+        160
+      ],
+      "id": "07509b50-aec6-4a4c-89fa-4f0edecad494",
+      "name": "É Funcionario"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    a.id AS atendimento_id,\n    a.protocolo,\n    a.telefone_cliente,\n    a.nome_cliente,\n    a.status\nFROM funcionario f\nLEFT JOIN atendimento a\n    ON a.atendente_id = f.id\n    AND a.status <> 'FINALIZADO'\nWHERE f.id = {{ $json.funcionario_id }}\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        -256
+      ],
+      "id": "5d74a2c3-eeb3-47c6-ba0d-0b426bed0a60",
+      "name": "BuscarAtendimento",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "aa86f828-3006-43d7-9827-def23a8acc7d",
+              "leftValue": "={{ $('Buscar Funcionario').item.json.status }}",
+              "rightValue": "OCUPADO",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        432,
+        -256
+      ],
+      "id": "6a1d78c4-7bb2-4761-88d4-7aac0ba5b453",
+      "name": "EmAtendimento"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO fila_mensagens (\n    telefone,\n    mensagem,\n    atendimento_id,\n    tipo\n)\nVALUES (\n    '{{ $('Filtrar dados importantes').item.json.phone }}',\n    '{{ $('Filtrar dados importantes').item.json.mensagem }}',\n    {{ $json.atendimento_id }},\n    'FUNCIONARIO'\n)\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        976,
+        -304
+      ],
+      "id": "27fd81ce-0850-4643-b8a0-d9b74b3eb4f3",
+      "name": "Inserir Mensagem a fila",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    f.id AS funcionario_id,\n    f.nome AS funcionario,\n    f.telefone AS telefone_funcionario,\n    f.status AS status\nFROM funcionario f\nWHERE f.telefone = '{{ $('Filtrar dados importantes').item.json.phone }}'\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -32,
+        -64
+      ],
+      "id": "03215c55-070d-4bb0-a93d-00a191566430",
+      "name": "Buscar Funcionario",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e08551f2-4e85-40a4-bf92-7e946363c90c",
+              "leftValue": "={{ $('Filtrar dados importantes').item.json.mensagem }}",
+              "rightValue": "/fim",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        736,
+        -400
+      ],
+      "id": "8ff9c115-6448-470f-986d-c6ce0acc783b",
+      "name": "Finaliza antendimento?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE atendimento\nSET\n    status = 'FINALIZADO',\n    atualizado_em = CURRENT_TIMESTAMP,\n    ultima_mensagem = CURRENT_TIMESTAMP\nWHERE id = {{ $json.atendimento_id }}\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        976,
+        -512
+      ],
+      "id": "9650575c-dda5-482a-96f3-41553a3e74a4",
+      "name": "Finaliza atendimento",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE funcionario\nSET\n    status = 'DISPONIVEL',\n    atendimentos_ativos = GREATEST(atendimentos_ativos - 1, 0),\n    atualizado_em = CURRENT_TIMESTAMP\nWHERE id = {{ $('Buscar Funcionario').item.json.funcionario_id }}\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1200,
+        -512
+      ],
+      "id": "b5ddac21-4993-40dc-a5d7-30cf20d9f654",
+      "name": "Libera funcionario",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO fila_mensagens (\n    telefone,\n    mensagem,\n    atendimento_id,\n    tipo\n)\nVALUES (\n    '{{ $('Filtrar dados importantes').item.json.phone }}',\n    '{{ $('Filtrar dados importantes').item.json.mensagem }}',\n    {{ $json.atendimento_id }},\n    'FUNCIONARIO'\n)\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1424,
+        -512
+      ],
+      "id": "257df871-732e-4a19-9386-9edbc8f7c490",
+      "name": "Inserir Mensagem a fila1",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    CASE\n        WHEN EXTRACT(ISODOW FROM CURRENT_DATE) IN (6, 7) THEN false\n\n        WHEN EXISTS (\n            SELECT 1\n            FROM feriado\n            WHERE data = CURRENT_DATE\n        ) THEN false\n\n        WHEN CURRENT_TIME BETWEEN TIME '08:00' AND TIME '11:50'\n            THEN true\n\n        WHEN CURRENT_TIME BETWEEN TIME '13:00' AND TIME '16:50'\n            THEN true\n\n        ELSE false\n    END AS dentro_horario;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        480,
+        352
+      ],
+      "id": "667dab97-a5b9-46be-be4b-2f18315d7ebf",
+      "name": "Verificar data e hora",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "31bbaa20-3293-49a2-9daa-e6b6bb5eb5cb",
+              "leftValue": "={{ $json.dentro_horario }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        704,
+        352
+      ],
+      "id": "84cf54c2-59a3-45ae-ae91-28cd6419251b",
+      "name": "Horario de atendimento"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO fila_mensagens (\n    telefone,\n    mensagem,\n    atendimento_id,\n    tipo\n)\nVALUES (\n    '{{ $('Filtrar dados importantes').item.json.phone }}',\n    'Olá! No momento, não estamos realizando atendimentos.\n\nNosso horário de funcionamento é de segunda a sexta-feira, das 08:00 às 11:50 e das 13:00 às 16:50.\n\nPor favor, envie sua mensagem novamente durante nosso horário de atendimento. Teremos prazer em atendê-lo!',\n    NULL,\n    'FORA_HORARIO'\n)\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        944,
+        560
+      ],
+      "id": "d5ad6545-c564-48d3-abbb-67b71bc1d939",
+      "name": "Inserir mensagem de volte logo a fila ",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO fila_mensagens (\n    telefone,\n    mensagem,\n    atendimento_id,\n    tipo\n)\nVALUES (\n    '{{ $('Filtrar dados importantes').item.json.phone }}',\n    'Olá! No momento, não consigo processar imagens, áudios ou figurinhas. Por favor, envie sua mensagem em formato de texto.',\n    NULL,\n    'ERRO'\n)\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1216,
+        496
+      ],
+      "id": "362518df-b8f3-4475-8f3c-b6acc3339b01",
+      "name": "Inserir mensagem de erro a fila",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Filtrar dados importantes').item.json.mensagem }}",
+                    "rightValue": "/ausente",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "55b78429-22a7-4711-96a4-566750a37fcb"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "49b5e86a-6abb-41af-9c81-91356c8d71c7",
+                    "leftValue": "={{ $('Filtrar dados importantes').item.json.mensagem }}",
+                    "rightValue": "/iniciar",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "e1025950-8f3b-45ee-b1d5-fc3076cb785e",
+                    "leftValue": "={{ $('Filtrar dados importantes').item.json.mensagem }}",
+                    "rightValue": "/encerrar",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        720,
+        -96
+      ],
+      "id": "9acebe39-0b44-47cb-b3d2-825ecba3b258",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE funcionario\nSET\n    status = 'DISPONIVEL',\n    atualizado_em = CURRENT_TIMESTAMP\nWHERE id = {{ $('Buscar Funcionario').item.json.funcionario_id }}\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1344,
+        -80
+      ],
+      "id": "184f84b5-094a-4093-80cd-1d0089edc8a6",
+      "name": "SET Iniciar",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE funcionario\nSET\n    status = 'AUSENTE',\n    atualizado_em = CURRENT_TIMESTAMP\nWHERE id = {{ $('Buscar Funcionario').item.json.funcionario_id }}\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1344,
+        -240
+      ],
+      "id": "0d51172d-faf6-4c05-9906-182eae13df2e",
+      "name": "SET Ausente",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Filtrar dados importantes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar dados importantes": {
+      "main": [
+        [
+          {
+            "node": "Mensagem minha ou de grupo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensagem minha ou de grupo?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "VerficarNumero",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É mensagem de texto?": {
+      "main": [
+        [
+          {
+            "node": "Gerar protocolo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Inserir mensagem de erro a fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar atendimento": {
+      "main": [
+        [
+          {
+            "node": "Em atendimento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Em atendimento": {
+      "main": [
+        [
+          {
+            "node": "Encontrar atendimento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Verificar data e hora",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gerar protocolo": {
+      "main": [
+        [
+          {
+            "node": "Criar atendimento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar atendimento": {
+      "main": [
+        [
+          {
+            "node": "Inserir mensagem a fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Encontrar atendimento": {
+      "main": [
+        [
+          {
+            "node": "Inserir mensagem a fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VerficarNumero": {
+      "main": [
+        [
+          {
+            "node": "É Funcionario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É Funcionario": {
+      "main": [
+        [
+          {
+            "node": "Buscar Funcionario",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Consultar atendimento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BuscarAtendimento": {
+      "main": [
+        [
+          {
+            "node": "EmAtendimento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EmAtendimento": {
+      "main": [
+        [
+          {
+            "node": "Finaliza antendimento?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Funcionario": {
+      "main": [
+        [
+          {
+            "node": "BuscarAtendimento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finaliza antendimento?": {
+      "main": [
+        [
+          {
+            "node": "Finaliza atendimento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Inserir Mensagem a fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finaliza atendimento": {
+      "main": [
+        [
+          {
+            "node": "Libera funcionario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Libera funcionario": {
+      "main": [
+        [
+          {
+            "node": "Inserir Mensagem a fila1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar data e hora": {
+      "main": [
+        [
+          {
+            "node": "Horario de atendimento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Horario de atendimento": {
+      "main": [
+        [
+          {
+            "node": "É mensagem de texto?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Inserir mensagem de volte logo a fila ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "SET Ausente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SET Iniciar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SET Ausente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "e37add3c-5f91-4e80-b9c7-cb11c5628f1c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a922a9d67d7b492e1aea2b1c763f273a704ea6e2f7f23abd543a9bb0f9728e42"
+  },
+  "nodeGroups": [],
+  "id": "OxuFwBYnTrwMgb6D",
+  "tags": []
+}

@@ -1,0 +1,196 @@
+{
+  "name": "Instalçao",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS setor (\n    id SERIAL PRIMARY KEY,\n    nome VARCHAR(100) NOT NULL UNIQUE\n);\n\nCREATE TABLE IF NOT EXISTS funcionario (\n    id SERIAL PRIMARY KEY,\n\n    nome VARCHAR(200) NOT NULL,\n\n    telefone VARCHAR(30) NOT NULL UNIQUE,\n\n    setor_id INT NOT NULL,\n\n    status VARCHAR(30) NOT NULL DEFAULT 'DISPONIVEL',\n\n    atendimentos_ativos INT NOT NULL DEFAULT 0,\n\n    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n\n    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n\n    CONSTRAINT fk_funcionario_setor\n        FOREIGN KEY (setor_id)\n        REFERENCES setor(id)\n);\n\nCREATE TABLE IF NOT EXISTS atendimento (\n    id SERIAL PRIMARY KEY,\n\n    protocolo VARCHAR(20) NOT NULL UNIQUE,\n\n    telefone_cliente VARCHAR(30) NOT NULL,\n\n    nome_cliente VARCHAR(200),\n\n    setor_id INT NOT NULL,\n\n    atendente_id INT,\n\n    status VARCHAR(30) NOT NULL,\n\n    ultima_mensagem TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n\n    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n\n    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n\n    CONSTRAINT fk_atendimento_setor\n        FOREIGN KEY (setor_id)\n        REFERENCES setor(id),\n\n    CONSTRAINT fk_atendimento_funcionario\n        FOREIGN KEY (atendente_id)\n        REFERENCES funcionario(id)\n);\n\nCREATE TABLE fila_mensagens (\n    id BIGSERIAL PRIMARY KEY,\n\n    telefone VARCHAR(30) NOT NULL,\n  \n    mensagem TEXT NOT NULL,\n\n    atendimento_id INT NULL,\n\n    tipo VARCHAR(30) NOT NULL,\n\n    status VARCHAR(20) NOT NULL DEFAULT 'PENDENTE',\n\n    criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,\n    processado_em TIMESTAMP NULL,\n\n    tentativas INT NOT NULL DEFAULT 0,\n\n    erro TEXT NULL,\n\n    CONSTRAINT fk_fila_mensagens_atendimento\n        FOREIGN KEY (atendimento_id)\n        REFERENCES atendimento(id)\n);\n\nCREATE TABLE feriado (\n    id SERIAL PRIMARY KEY,\n    data DATE NOT NULL UNIQUE,\n    descricao VARCHAR(200) NOT NULL\n);\n\nCREATE TABLE IF NOT EXISTS aguardando_funcionario (\n    id BIGSERIAL PRIMARY KEY,\n\n    telefone VARCHAR(30) NOT NULL,\n\n    mensagem TEXT NOT NULL,\n\n    atendimento_id INT NOT NULL,\n\n    setor_id INT NOT NULL,\n\n    status VARCHAR(20) NOT NULL DEFAULT 'AGUARDANDO',\n\n    criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,\n\n    processado_em TIMESTAMP NULL,\n\n    tentativas INT NOT NULL DEFAULT 0,\n\n    erro TEXT NULL,\n\n    CONSTRAINT fk_aguardando_funcionario_atendimento\n        FOREIGN KEY (atendimento_id)\n        REFERENCES atendimento(id),\n\n    CONSTRAINT fk_aguardando_funcionario_setor\n        FOREIGN KEY (setor_id)\n        REFERENCES setor(id)\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -112,
+        -128
+      ],
+      "id": "3c9d6073-0dbc-4627-8393-96eabbd8d756",
+      "name": "Criar DB",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DROP TABLE IF EXISTS aguardando_funcionario;\n\nDROP TABLE IF EXISTS fila_mensagens;\n\nDROP TABLE IF EXISTS atendimento;\n\nDROP TABLE IF EXISTS funcionario;\n\nDROP TABLE IF EXISTS setor;\n\nDROP TABLE IF EXISTS feriado;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -320,
+        -128
+      ],
+      "id": "06eaf7cc-252b-49a9-8a4c-007fdc4cab6b",
+      "name": "Deletar DB",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -656,
+        -16
+      ],
+      "id": "31d5c9c5-a43d-4dbf-bb58-862bb3b3abc5",
+      "name": "Gerenciador DB"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT *\nFROM atendimento;\nSELECT *\nFROM setor;\nSELECT *\nFROM funcionario;\nSELECT *\nFROM fila_mensagens",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        128
+      ],
+      "id": "33bd812b-4865-42ef-94eb-bc1cfa1dbda2",
+      "name": "Execute a SQL query1",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO setor (nome)\nVALUES\n    ('Recepcao'),\n    ('Contabilidade'),\n    ('Assessoria'),\n    ('RH'),\n    ('Administracao')\nON CONFLICT (nome) DO NOTHING;\n\nINSERT INTO funcionario\n(\n    nome,\n    telefone,\n    setor_id,\n    status\n)\nVALUES\n(\n    'Patricia',\n    '557592895262',\n    4,\n    'DISPONIVEL'\n)\nON CONFLICT (telefone) DO NOTHING;\n\nINSERT INTO feriado (data, descricao)\nVALUES\n('2026-01-01', 'Confraternização Universal'),\n('2026-04-21', 'Tiradentes'),\n('2026-09-07', 'Independência do Brasil'),\n('2026-10-12', 'Nossa Senhora Aparecida'),\n('2026-11-02', 'Finados'),\n('2026-11-15', 'Proclamação da República'),\n('2026-12-25', 'Natal');",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        96,
+        -128
+      ],
+      "id": "1e024422-e196-4aaa-828b-a356c009d7d9",
+      "name": "Inserir valores",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE fila_mensagens\nSET status = 'PENDENTE'\nWHERE id = 27",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        176,
+        304
+      ],
+      "id": "9c1989ee-f91a-42e5-8082-9f845b0e00fa",
+      "name": "atualizar id atendimento",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM funcionario\nWHERE telefone = '557591352801'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -480,
+        368
+      ],
+      "id": "9a27f651-1440-4abb-80de-bf200980ea6b",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Criar DB": {
+      "main": [
+        [
+          {
+            "node": "Inserir valores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gerenciador DB": {
+      "main": [
+        [
+          {
+            "node": "Deletar DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deletar DB": {
+      "main": [
+        [
+          {
+            "node": "Criar DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inserir valores": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "a2a8936c-9056-46c4-8b8c-708f7013a123",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a922a9d67d7b492e1aea2b1c763f273a704ea6e2f7f23abd543a9bb0f9728e42"
+  },
+  "nodeGroups": [],
+  "id": "I2Q24NneJROyhyiL",
+  "tags": []
+}

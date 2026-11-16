@@ -1,0 +1,355 @@
+{
+  "name": "Fila Aguardando Funcionario",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds",
+              "secondsInterval": 5
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -96,
+        16
+      ],
+      "id": "27672c81-72f2-4a71-8ff5-414a7303d789",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    a.id AS atendimento_id,\n    a.protocolo,\n    a.telefone_cliente,\n    a.nome_cliente,\n    a.setor_id\nFROM atendimento a\nWHERE a.status = 'AGUARDANDO_ATENDENTE'\nORDER BY a.criado_em ASC\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        128,
+        16
+      ],
+      "id": "52c069e4-650f-4802-b668-1a2c4cb0353f",
+      "name": "Buscar atendimento em espera",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "30d30f2e-cc5c-4ee8-83b8-89eb8ea67a63",
+              "leftValue": "={{ $json.atendimento_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        352,
+        16
+      ],
+      "id": "555f27cf-4ba5-466e-a668-f18e1c578a1d",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    id AS funcionario_id,\n    nome,\n    telefone,\n    setor_id\nFROM funcionario\nWHERE setor_id = {{ Number($json.setor_id) }}\nAND status = 'DISPONIVEL'\nORDER BY\n    atendimentos_ativos ASC,\n    atualizado_em ASC\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        592,
+        -112
+      ],
+      "id": "16f28916-7000-46b3-b4c7-a93e042637ee",
+      "name": "Buscar Funcionario disponivel",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "65aa6876-62a3-4f5d-b315-809f165eb83a",
+              "leftValue": "={{ $json.funcionario_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        816,
+        -112
+      ],
+      "id": "a94a8f50-66b6-4fe3-918a-4cfce1847ded",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE atendimento\nSET\n    atendente_id = {{ Number($json.funcionario_id) }},\n    status = 'EM_ATENDIMENTO',\n    atualizado_em = CURRENT_TIMESTAMP\nWHERE id = {{ Number($('Buscar atendimento em espera').item.json.atendimento_id) }}\nAND status = 'AGUARDANDO_ATENDENTE'\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1040,
+        -224
+      ],
+      "id": "66baf49a-c79d-4282-8836-9bc2c5215810",
+      "name": "Atribuir funcionario",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE funcionario\nSET\n    status = 'OCUPADO',\n    atendimentos_ativos = atendimentos_ativos + 1,\n    atualizado_em = CURRENT_TIMESTAMP\nWHERE id = {{ Number($('Buscar Funcionario disponivel').item.json.funcionario_id) }}\nAND status = 'DISPONIVEL'\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1264,
+        -224
+      ],
+      "id": "4cc9f82b-e58b-4b36-9b5b-73622c33204c",
+      "name": "Ocupar funcionario",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    id,\n    telefone,\n    mensagem,\n    atendimento_id\nFROM aguardando_funcionario\nWHERE atendimento_id = {{ Number($('Buscar atendimento em espera').item.json.atendimento_id) }}\n  AND status = 'AGUARDANDO'\nORDER BY criado_em ASC\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1488,
+        -224
+      ],
+      "id": "b0e79a8a-de4f-41b3-b679-0598c3925d45",
+      "name": "Buscar mensagem aguardando",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO fila_mensagens (\n    telefone,\n    mensagem,\n    atendimento_id,\n    tipo\n)\nVALUES (\n    '{{ $('Buscar mensagem aguardando').item.json.telefone }}',\n    '{{ $('Buscar mensagem aguardando').item.json.mensagem }}',\n    {{ Number($('Buscar mensagem aguardando').item.json.atendimento_id) }},\n    'ENTRADA'\n)\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1712,
+        -224
+      ],
+      "id": "1a43e041-d283-4bbb-9f38-ab9c0e3127e3",
+      "name": "Inserir mensagem na fila",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE aguardando_funcionario\nSET\n    status = 'PROCESSADO',\n    processado_em = CURRENT_TIMESTAMP\nWHERE id = {{ Number($('Buscar mensagem aguardando').item.json.id) }}\n  AND status = 'AGUARDANDO'\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1936,
+        -224
+      ],
+      "id": "4c89464f-055e-4fab-9f01-75a86c653f71",
+      "name": "Setar mensagem para processado",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Buscar atendimento em espera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar atendimento em espera": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Buscar Funcionario disponivel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Funcionario disponivel": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Atribuir funcionario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atribuir funcionario": {
+      "main": [
+        [
+          {
+            "node": "Ocupar funcionario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ocupar funcionario": {
+      "main": [
+        [
+          {
+            "node": "Buscar mensagem aguardando",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar mensagem aguardando": {
+      "main": [
+        [
+          {
+            "node": "Inserir mensagem na fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inserir mensagem na fila": {
+      "main": [
+        [
+          {
+            "node": "Setar mensagem para processado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "f67bbbac-ca94-4b98-86a8-d4b3568053a1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a922a9d67d7b492e1aea2b1c763f273a704ea6e2f7f23abd543a9bb0f9728e42"
+  },
+  "nodeGroups": [],
+  "id": "GyjErK5Wup0L8OfA",
+  "tags": []
+}

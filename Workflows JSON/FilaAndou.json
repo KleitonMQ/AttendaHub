@@ -1,0 +1,1251 @@
+{
+  "name": "FilaAndou",
+  "nodes": [
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('BuscarDadosAtendimento').item.json.telefone_cliente }}",
+        "tableName": "atendahub_ai_memory",
+        "contextWindowLength": 15
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.4,
+      "position": [
+        1312,
+        64
+      ],
+      "id": "fc0df53a-9bc7-4b19-a6c0-89bf25461246",
+      "name": "Postgres Chat Memory",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const resposta = JSON.parse($json.output);\n\nreturn [\n  {\n    json: resposta\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1536,
+        -192
+      ],
+      "id": "fd04819d-b1fa-4806-a512-352d2235748c",
+      "name": "Output para Json"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('BuscarDadosAtendimento').item.json.mensagem }}",
+        "options": {
+          "systemMessage": "Você é a recepcionista virtual da Prefeitura Municipal de Barrocas.\n\nSua função é receber os cidadãos, compreender suas necessidades e identificar corretamente qual setor da Prefeitura deve realizar o atendimento.\n\nSeja sempre educada, cordial, paciente e profissional.\n\nOs únicos setores disponíveis são:\n\n- Recepcao - id: 1\n- Contabilidade - id: 2\n- Assessoria - id: 3\n- RH - id: 4\n- Administracao - id: 5\n\nNunca invente novos setores.\n\nSe ainda não tiver informações suficientes para identificar o setor correto, continue conversando com o cidadão até entender sua necessidade.\n\nSua resposta DEVE ser APENAS um JSON válido.\n\nNunca escreva explicações antes ou depois do JSON.\nNunca utilize Markdown.\nNunca utilize ```json.\nNunca utilize comentários.\n\nSe ainda estiver conversando com o cidadão para entender a solicitação, responda exatamente neste formato:\n\n{\n  \"acao\": \"CONVERSA\",\n  \"setor\": \"4\",\n  \"confianca\": 0.45,\n  \"mensagem\": \"Sua resposta para o cidadão.\"\n}\n\nQuando conseguir identificar claramente o setor responsável, responda exatamente neste formato:\n\n{\n  \"acao\": \"ENCAMINHAR\",\n  \"setor\": \"1\",\n  \"confianca\": 0.98,\n  \"mensagem\": \"Perfeito! Vou encaminhar seu atendimento para o setor de Recursos Humanos.\"\n}\n\nRegras para o campo \"confianca\":\n\n- Valor decimal entre 0.00 e 1.00.\n- Quanto maior a certeza sobre o setor, maior deve ser a confiança.\n- Utilize no máximo duas casas decimais.\n\nExemplos:\n\n0.20 → A mensagem está muito vaga.\n0.45 → Ainda existem dúvidas sobre o setor.\n0.70 → Há um setor provável, mas seria interessante confirmar.\n0.90 → O setor está praticamente identificado.\n1.00 → Total certeza sobre o setor.\n\nRegras importantes:\n\n- \"acao\" deve conter apenas \"CONVERSA\" ou \"ENCAMINHAR\".\n- \"setor\" deve conter exatamente um dos valores:\n  - 1\n  - 2\n  - 3\n  - 4\n  - 5\n- A mensagem deve ser escrita diretamente para o cidadão.\n- Nunca invente setores.\n- Nunca encaminhe para um setor se a confiança for baixa.\n- Se a confiança for inferior a 0.90, continue a conversa para obter mais informações antes de encaminhar."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1200,
+        -192
+      ],
+      "id": "145c1c6e-a90f-4244-b43f-c52a50d16b80",
+      "name": "Recepcionista"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE atendimento\nSET\n    setor_id = {{ Number($json.setor) }},\n    status = 'AGUARDANDO_ATENDENTE',\n    atualizado_em = CURRENT_TIMESTAMP\nWHERE telefone_cliente = '{{ $('ProximaMensagem').item.json.telefone }}'\nAND status <> 'FINALIZADO'\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2000,
+        -272
+      ],
+      "id": "47ed59ea-edc0-46f6-9173-8e995621d801",
+      "name": "Atualiza atendimento",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT *\nFROM funcionario\nWHERE\n    setor_id = {{ Number($json.setor_id) }}\nAND\n    status = 'DISPONIVEL'\nORDER BY\n    atendimentos_ativos ASC,\n    atualizado_em ASC\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2144,
+        -400
+      ],
+      "id": "7cc36ab9-7db2-4b99-a8d3-003bee1ef25d",
+      "name": "Encontra setor disponivel",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://wuzapi:8080/chat/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "token"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    Phone: $('BuscarDadosAtendimento').item.json.telefone_cliente,\n    Body: $('Output para Json').item.json.mensagem\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2512,
+        -176
+      ],
+      "id": "0716a758-a997-4912-80b8-aac72e627cce",
+      "name": "Resposta recepcao"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://wuzapi:8080/chat/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "token"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"Phone\": \"{{ $('ProximaMensagem').item.json.telefone }}\",\n  \"Body\": \"{{ $('Output para Json').item.json.mensagem }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3024,
+        -608
+      ],
+      "id": "636f3b85-2524-4cd8-8ef0-2d677167961d",
+      "name": "Resposta recepcao1"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds",
+              "secondsInterval": 12
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -1552,
+        144
+      ],
+      "id": "659517c8-1ffc-42e4-a353-d3c8c2d41e8c",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    telefone,\n    STRING_AGG(mensagem, E'\\n' ORDER BY criado_em, id) AS mensagem,\n    MIN(id) AS primeira_id,\n    ARRAY_AGG(id ORDER BY criado_em, id) AS ids,\n    MIN(atendimento_id) AS atendimento_id,\n    MIN(tipo) AS tipo\nFROM fila_mensagens\nWHERE telefone = (\n    SELECT telefone\n    FROM fila_mensagens\n    WHERE status = 'PENDENTE'\n      AND criado_em <= NOW() - INTERVAL '15 seconds'\n    ORDER BY criado_em ASC, id ASC\n    LIMIT 1\n)\nAND status = 'PENDENTE'\nGROUP BY telefone;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -960,
+        160
+      ],
+      "id": "ddeb7118-72c7-4d5d-b4ae-223b0a192923",
+      "name": "ProximaMensagem",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    a.id AS atendimento_id,\n    a.setor_id,\n    s.nome AS setor,\n    a.telefone_cliente,\n    a.nome_cliente,\n    a.atendente_id,\n    '{{ $('ProximaMensagem').item.json.mensagem }}' AS mensagem,\n    '{{ $('ProximaMensagem').item.json.tipo }}' AS tipo,\n    '{{ $('ProximaMensagem').item.json.ids }}' AS ids\nFROM atendimento a\nINNER JOIN setor s\n    ON s.id = a.setor_id\nWHERE a.id = {{ $('ProximaMensagem').item.json.atendimento_id }}\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        528,
+        432
+      ],
+      "id": "b35361a1-ed05-43c3-b71f-674992fdfb04",
+      "name": "BuscarDadosAtendimento",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE atendimento\nSET\n    atendente_id = {{ Number($json.id) }},\n    atualizado_em = CURRENT_TIMESTAMP\nWHERE telefone_cliente = '{{ $('ProximaMensagem').item.json.telefone }}'\nAND status <> 'FINALIZADO'\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2512,
+        -608
+      ],
+      "id": "f7a0e506-54e2-4201-84fa-e97e2dc0f2a3",
+      "name": "Altera setor do atendimento",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n    EXISTS (\n        SELECT 1\n        FROM funcionario\n        WHERE telefone = '{{ $json.telefone }}'\n    ) AS encontrado;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -608,
+        160
+      ],
+      "id": "cc59d3af-b0c0-4327-9683-9d3fc4c95fae",
+      "name": "Verificar destino",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE fila_mensagens\nSET\n    status = 'ENVIADA',\n    processado_em = CURRENT_TIMESTAMP\nWHERE id = ANY(\n    ARRAY[\n        {{ $('ProximaMensagem').item.json.ids.join(',') }}\n    ]::BIGINT[]\n)\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        3296,
+        -320
+      ],
+      "id": "eeff4db2-3b96-43d2-ab8f-a2d8d5d8e920",
+      "name": "Atualizar mensagem lida",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE fila_mensagens\nSET\n    status = 'ENVIADA',\n    processado_em = CURRENT_TIMESTAMP\nWHERE id = ANY(\n    ARRAY[\n        {{ $('ProximaMensagem').item.json.ids.join(',') }}\n    ]::BIGINT[]\n)\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        512,
+        16
+      ],
+      "id": "e767cc0d-9131-4922-bdca-da7823add0f9",
+      "name": "Atualizar mensagem entregue",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO fila_mensagens (\n    telefone,\n    mensagem,\n    atendimento_id,\n    tipo\n)\nVALUES (\n    '{{ $('Encontra setor disponivel').item.json.telefone }}',\n    '{{ $('ProximaMensagem').item.json.mensagem }}',\n    {{ $('ProximaMensagem').item.json.atendimento_id }},\n    'AVISO'\n)\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2848,
+        -608
+      ],
+      "id": "40186622-9f4e-46ba-87ac-e45cce363058",
+      "name": "Inserir mensagem da IA a fila",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE funcionario\nSET\n    status = 'OCUPADO',\n    atendimentos_ativos = atendimentos_ativos + 1,\n    atualizado_em = CURRENT_TIMESTAMP\nWHERE id = {{ Number($json.atendente_id) }}\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2672,
+        -608
+      ],
+      "id": "895ad690-c85a-435a-9a1f-e2f8e577b7d7",
+      "name": "Ocupar funcionario",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    a.id AS atendimento_id,\n    a.setor_id,\n    s.nome AS setor,\n    a.telefone_cliente,\n    a.nome_cliente,\n    a.atendente_id,\n    f.nome AS nome_funcionario,\n    f.telefone AS telefone_funcionario,\n    '{{ $('ProximaMensagem').item.json.mensagem }}' AS mensagem,\n    '{{ $('ProximaMensagem').item.json.tipo }}' AS tipo,\n    '{{ $('ProximaMensagem').item.json.ids }}' AS ids\nFROM atendimento a\nINNER JOIN setor s\n    ON s.id = a.setor_id\nINNER JOIN funcionario f\n    ON f.id = a.atendente_id\nWHERE a.id = {{ $('ProximaMensagem').item.json.atendimento_id }}\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        128,
+        16
+      ],
+      "id": "ac94b6a8-d191-49fb-baaa-077ed5f60f5a",
+      "name": "Responder para cliente",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "03bea889-3309-4e64-b04f-3e9fee183e80",
+              "leftValue": "={{ $json.encontrado }}",
+              "rightValue": "557588304775",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -128,
+        176
+      ],
+      "id": "eb889d9c-1d3a-4ad4-ab82-6450074c9857",
+      "name": "Funcionario em atendimento"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "8b9ef720-93d3-48a2-96ed-7b34543dc2f7",
+              "leftValue": "={{ $json.acao }}",
+              "rightValue": "ENCAMINHAR",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1744,
+        -192
+      ],
+      "id": "3ddef0cb-a4ec-4148-b063-797cc6a90143",
+      "name": "Setor identificado"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ee6cbfd6-576a-4825-9ca3-b527665c8f91",
+              "leftValue": "={{ $json.setor_id }}",
+              "rightValue": 1,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        768,
+        432
+      ],
+      "id": "840330c6-1e49-4d04-ba40-c96c3a1326ed",
+      "name": "Atendimento com IA"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    f.id,\n    f.nome,\n    f.telefone\nFROM funcionario f\nWHERE f.id = {{ $('BuscarDadosAtendimento').item.json.atendente_id }}\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        992,
+        528
+      ],
+      "id": "9a7fba16-628d-4dd3-8c49-efa29d2649b9",
+      "name": "Selecionar Funcionario",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://wuzapi:8080/chat/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "token"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    Phone: $json.telefone,\n    Body: $('ProximaMensagem').item.json.mensagem,\n    Id: 'ATTENDA' + String($('ProximaMensagem').item.json.primeira_id).padStart(24, '0')\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1200,
+        528
+      ],
+      "id": "7c6cf8f4-d271-48d6-9917-5246934306f8",
+      "name": "Enviar Mensagem ao funcionario"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE fila_mensagens\nSET\n    status = 'ENVIADA',\n    processado_em = CURRENT_TIMESTAMP\nWHERE id = ANY(\n    ARRAY[\n        {{ $('ProximaMensagem').item.json.ids.join(',') }}\n    ]::BIGINT[]\n)\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1424,
+        528
+      ],
+      "id": "2916832b-5a84-4d58-a659-9a77e1777efb",
+      "name": "Remover Mensagem da fila",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ee4619f2-ac63-4468-80df-cede5055c8b4",
+              "leftValue": "={{ $('ProximaMensagem').item.json.tipo }}",
+              "rightValue": "FORA_HORARIO",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "25310d7c-ce6d-4c0b-ab74-478fc0465b0a",
+              "leftValue": "={{ $('ProximaMensagem').item.json.tipo }}",
+              "rightValue": "ERRO",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -384,
+        160
+      ],
+      "id": "7ac72498-d3f1-4a66-a485-a4639993d1fd",
+      "name": "E mensagem automatica"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://wuzapi:8080/chat/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "token"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"Phone\": \"{{ $('ProximaMensagem').item.json.telefone }}\",\n  \"Body\": {{ JSON.stringify($('ProximaMensagem').item.json.mensagem) }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        48,
+        -480
+      ],
+      "id": "99fde579-f614-496b-9f50-835b4a57b93f",
+      "name": "Enviar mensagem automática"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE fila_mensagens\nSET\n    status = 'ENVIADA',\n    processado_em = CURRENT_TIMESTAMP\nWHERE id = ANY(\n    ARRAY[\n        {{ $('ProximaMensagem').item.json.ids.join(',') }}\n    ]::BIGINT[]\n)\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        272,
+        -480
+      ],
+      "id": "b6260995-ef5f-4c9b-a3bf-8535e75cecfb",
+      "name": "Atualizar mensagem automatica entregue",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.1-flash-lite",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        1136,
+        64
+      ],
+      "id": "ee82d206-612f-4e51-a18e-5aae91b819e4",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "9eJ0PmI31iQAwCfi",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://wuzapi:8080/chat/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "token"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"Phone\": \"{{ $('ProximaMensagem').item.json.telefone }}\",\n  \"Body\": \"Olá! No momento, todos os atendentes deste setor estão ocupados.\\n\\nSeu atendimento ficará aguardando na fila e será encaminhado assim que um atendente estiver disponível.\\n\\nPor favor, aguarde alguns minutos. Obrigado pela compreensão!\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2512,
+        -384
+      ],
+      "id": "21dc14b9-1795-4710-b0ba-d4171eba77d1",
+      "name": "Mensagen atendententes ocupados"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE atendimento\nSET\n    atualizado_em = CURRENT_TIMESTAMP\nWHERE id = {{ $('ProximaMensagem').item.json.atendimento_id }}\nAND status = 'AGUARDANDO_ATENDENTE'\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2688,
+        -384
+      ],
+      "id": "8629d73f-ba3d-4580-9135-728d1be4a25f",
+      "name": "SET augardando atendimento",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "337a0aae-2e15-47f4-a8c8-39d70cb25992",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2320,
+        -512
+      ],
+      "id": "6c8f4beb-25e3-4827-bf29-253c647e6f00",
+      "name": "Funcionario disponivel"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO aguardando_funcionario (\n    telefone,\n    mensagem,\n    atendimento_id,\n    setor_id\n)\nSELECT\n    a.telefone_cliente,\n    '{{ $('ProximaMensagem').item.json.mensagem }}',\n    a.id,\n    a.setor_id\nFROM atendimento a\nWHERE a.id = {{ $('ProximaMensagem').item.json.atendimento_id }}\nAND a.status = 'AGUARDANDO_ATENDENTE'\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2864,
+        -384
+      ],
+      "id": "a23fe8c8-cd09-4096-b3ba-af156959558d",
+      "name": "Insert fila de aguardando funcionario",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT EXISTS (\n    SELECT 1\n    FROM fila_mensagens\n    WHERE status = 'PROCESSANDO'\n) AS processando;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -1328,
+        144
+      ],
+      "id": "fb024ac3-cff0-4c18-a131-6ec270f4380a",
+      "name": "Get mensagem processando",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "05560058-a37b-4d60-bc64-450f68d21c8f",
+              "leftValue": "={{ $json.processando }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1184,
+        144
+      ],
+      "id": "f14629cf-0cf5-4368-a73c-d074d9f4efe4",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE fila_mensagens\nSET\n    status = 'PROCESSANDO'\nWHERE id = ANY(\n    ARRAY[\n        {{ $('ProximaMensagem').item.json.ids.join(',') }}\n    ]::BIGINT[]\n)\nAND status = 'PENDENTE'\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -768,
+        160
+      ],
+      "id": "aa1952a7-8689-4314-a762-1a4a7de8c923",
+      "name": "SET Mensagem Processando",
+      "credentials": {
+        "postgres": {
+          "id": "ckIQF84b1hPVwQWm",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://wuzapi:8080/chat/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "token"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    Phone: $json.telefone_cliente,\n    Body: $('ProximaMensagem').item.json.mensagem,\n    Id: 'ATTENDA' + String($('ProximaMensagem').item.json.primeira_id).padStart(24, '0')\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        320,
+        16
+      ],
+      "id": "88b0892c-a7b0-4be4-a623-bdb7f789944d",
+      "name": "Envio ao cliente"
+    }
+  ],
+  "pinData": {
+    "Schedule Trigger": [
+      {
+        "json": {
+          "timestamp": "2026-10-02T15:30:14.437-04:00",
+          "Readable date": "October 2nd 2026, 3:30:14 pm",
+          "Readable time": "3:30:14 pm",
+          "Day of week": "Friday",
+          "Year": "2026",
+          "Month": "October",
+          "Day of month": "02",
+          "Hour": "15",
+          "Minute": "30",
+          "Second": "14",
+          "Timezone": "America/New_York (UTC-04:00)"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Recepcionista",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Output para Json": {
+      "main": [
+        [
+          {
+            "node": "Setor identificado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recepcionista": {
+      "main": [
+        [
+          {
+            "node": "Output para Json",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atualiza atendimento": {
+      "main": [
+        [
+          {
+            "node": "Encontra setor disponivel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Encontra setor disponivel": {
+      "main": [
+        [
+          {
+            "node": "Funcionario disponivel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resposta recepcao1": {
+      "main": [
+        [
+          {
+            "node": "Atualizar mensagem lida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get mensagem processando",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ProximaMensagem": {
+      "main": [
+        [
+          {
+            "node": "SET Mensagem Processando",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BuscarDadosAtendimento": {
+      "main": [
+        [
+          {
+            "node": "Atendimento com IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Altera setor do atendimento": {
+      "main": [
+        [
+          {
+            "node": "Ocupar funcionario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar destino": {
+      "main": [
+        [
+          {
+            "node": "E mensagem automatica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inserir mensagem da IA a fila": {
+      "main": [
+        [
+          {
+            "node": "Resposta recepcao1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ocupar funcionario": {
+      "main": [
+        [
+          {
+            "node": "Inserir mensagem da IA a fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resposta recepcao": {
+      "main": [
+        [
+          {
+            "node": "Atualizar mensagem lida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder para cliente": {
+      "main": [
+        [
+          {
+            "node": "Envio ao cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Funcionario em atendimento": {
+      "main": [
+        [
+          {
+            "node": "Responder para cliente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "BuscarDadosAtendimento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setor identificado": {
+      "main": [
+        [
+          {
+            "node": "Atualiza atendimento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resposta recepcao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atendimento com IA": {
+      "main": [
+        [
+          {
+            "node": "Recepcionista",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Selecionar Funcionario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Selecionar Funcionario": {
+      "main": [
+        [
+          {
+            "node": "Enviar Mensagem ao funcionario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Mensagem ao funcionario": {
+      "main": [
+        [
+          {
+            "node": "Remover Mensagem da fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "E mensagem automatica": {
+      "main": [
+        [
+          {
+            "node": "Enviar mensagem automática",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Funcionario em atendimento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar mensagem automática": {
+      "main": [
+        [
+          {
+            "node": "Atualizar mensagem automatica entregue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Recepcionista",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensagen atendententes ocupados": {
+      "main": [
+        [
+          {
+            "node": "SET augardando atendimento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Funcionario disponivel": {
+      "main": [
+        [
+          {
+            "node": "Altera setor do atendimento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mensagen atendententes ocupados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SET augardando atendimento": {
+      "main": [
+        [
+          {
+            "node": "Insert fila de aguardando funcionario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get mensagem processando": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [],
+        [
+          {
+            "node": "ProximaMensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SET Mensagem Processando": {
+      "main": [
+        [
+          {
+            "node": "Verificar destino",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envio ao cliente": {
+      "main": [
+        [
+          {
+            "node": "Atualizar mensagem entregue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "bf975247-7f4b-4508-9e34-1549d7726b04",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a922a9d67d7b492e1aea2b1c763f273a704ea6e2f7f23abd543a9bb0f9728e42"
+  },
+  "nodeGroups": [],
+  "id": "ozAGOkqCvoOAMrSg",
+  "tags": []
+}
